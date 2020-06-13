@@ -1,20 +1,34 @@
 """ Script to control on/off switching of Manson HC3602 Power Supply."""
 
-import serial, time
+import datetime
+import serial
+import time
 
 
-# Initializing usb connection to Manson power supply
-ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=0,
-			bytesize=serial.EIGHTBITS,
-			parity=serial.PARITY_NONE,
-			stopbits=serial.STOPBITS_ONE)
+def logging(log_message: str):
+    """
+    Simple logging in log.txt
+    Args:
+        log_message: str - Message, that will be appended to the log.txt
+    """
+
+    log_file = 'log.txt'
+    current_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with open(log_file, 'a+') as log:
+        log.write(f'{current_date} - {log_message} \n')
 
 
-def initialize(voltage_settings = "VOLT155\r", current_settings = "CURR020\r"):
-    """Initializes connection to Manson Powere Supply. Sets voltage and current.
-       Defaults are 15.5 Volt and 0.20 Ampere.
-       :param voltage_settings: Voltage value
-       :param current_settings: Ampere value"""
+def initialize(voltage_settings: str = "VOLT155\r", current_settings: str = "CURR020\r"):
+    """
+    Initializes connection to Manson Powere Supply.
+    Sets voltage and current for upcoming illumination.
+
+    Args:
+        voltage_settings: string - Voltage value (three digits: 10.0V := VOLT100\r).
+                                    Default "VOLT155\r" := 15.5 V
+        current_settings: string - Ampere value (three digits: 1 Amp := CURR100\r)
+                                    Default "0.20 Ampere" := 0.2 Amp
+    """
 
     z = 1
 
@@ -22,26 +36,29 @@ def initialize(voltage_settings = "VOLT155\r", current_settings = "CURR020\r"):
 
         ser.write(voltage_settings)
         time.sleep(0.5)
-        response=ser.readline()
+        response = ser.readline()
 
         if response == '':
             continue
-
 
     while z:
 
         ser.write(current_settings)
         time.sleep(0.5)
-        response=ser.readline()
+        response = ser.readline()
 
         if response == '':
             continue
 
 
-def single_illumination(time_light_on = 5, time_light_off  = 25):
-    """ One round of illumination, with 5 secondes light on and 25 seconds ligth off.
-        :param time_light_on: Switches power on for 5 seconds (default).
-        :param time_light_off: Switches power off for 25 seconds (default)."""
+def single_illumination(illumination_on: int = 5, illumination_off: int  = 25):
+    """
+    One single round of illumination.
+
+    Args:
+        illumination_on: integer - switches illumination on for X seconds. Default: 5 seconds.
+        illumination_off: integer - switches illumination off for X seconds. Default: 25 seconds.
+    """
 
     w = 1
 
@@ -49,64 +66,92 @@ def single_illumination(time_light_on = 5, time_light_off  = 25):
 
         ser.write("SOUT0\r")
         time.sleep(0.5)
-        response=ser.readline()
+        response = ser.readline()
 
         if response == '':
             continue
 
-
-    time.sleep(time_light_on)
+    time.sleep(illumination_on)
 
     while w:
 
         ser.write("SOUT1\r")
         time.sleep(0.5)
-        response=ser.readline()
+        response = ser.readline()
 
         if response == '':
             continue
 
-    time.sleep(time_light_off)
+    time.sleep(illumination_off)
 
 
-def illuminate(time_in_minutes,
-               voltage_settings="VOLT155\r",
-               current_settings = "CURR020\r",
-               time_light_on=5,
-               time_light_off=25
+def illuminate(illumination_time: int,
+               voltage_settings: str = "VOLT155\r",
+               current_settings: str = "CURR020\r",
+               individual_illumination_on: int = 5,
+               individual_illumination_off: int= 25
                ):
     """
     starts illumination for given times in minutes.
-    :param time_in_minutes:
-    :param voltage_settings:
-    :param current_settings:
-    :param time_light_on:
-    :param time_light_off:
+
+    Args:
+        illumination_time: integer - Total time of illumination block in Minutes.
+        voltage_settings: string - Voltage value (three digits: 10.0V := VOLT100\r).
+                                    Default VOLT155\r := 15.5V
+        current_settings: string - Ampere value (three digits: 1 Amp := CURR100\r)
+                                    Default CURR020\r := 0.2 Amp
+        individual_illumination_on: int - switches illumination on for X seconds. Default: 5 seconds.
+        individual_illumination_off: int - switches illumination off for X seconds. Default: 25 seconds.
     """
     
     initialize(voltage_settings, current_settings)
     start_time = time.time()
-    end_time = start_time + time_in_minutes * 60
+    end_time = start_time + illumination_time * 60
 
     while time.time() < end_time:
-        single_illumination(time_light_on, time_light_off)
+        single_illumination(individual_illumination_on, individual_illumination_off)
 
 
-if ser.isOpen():
+def start_illumination():
 
-    x = 1
+    # Initializing usb connection to Manson power supply
 
     try:
+        ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=0,
+                            bytesize=serial.EIGHTBITS,
+                            parity=serial.PARITY_NONE,
+                            stopbits=serial.STOPBITS_ONE)
 
-        ser.flushInput()
-        ser.flushOutput()
+    except serial.serialutil.SerialException:
+        logging('Connection to USB device could not be established!.')
 
-        initialize(voltage_settings="VOLT130\r")
+    if ser.isOpen():
 
-        while x:
+        x = 1
 
-            initialize()
-            
-            illuminate(30)
+        try:
 
-            time.sleep(3600)
+            ser.flushInput()
+            ser.flushOutput()
+
+            initialize(voltage_settings="VOLT130\r")
+            logging('Experiment started.')
+            while x:
+                logging('Illumination cirle successfully started.')
+                # illumination for 1 hour, 13V, 0.2Amp and 5s/20s cycles
+                illuminate(illumination_time=60,
+                           voltage_settings="VOLT130\r",
+                           current_settings="CURR020\r",
+                           individual_illumination_on=5,
+                           individual_illumination_off=20)
+
+                # illumination off for 1 hour
+                time.sleep(3600)
+                logging('Illumination circle successfully finised.')
+
+        except:
+            logging('Error occured, connetion interrupted.')
+
+
+if __name__ == '__main__':
+    start_illumination()
